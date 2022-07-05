@@ -19,7 +19,7 @@ def arrdot(a, b, size):
     return p0 * p2 + p1 * p3
 
 
-class source:
+class Source:
     def __init__(self, angle, diameter, raynum, rings):
         source_vec = np.zeros([2, raynum])
         source_vec[0, :] = np.linspace(0, diameter, raynum) * np.cos(angle + np.pi / 2)
@@ -39,7 +39,7 @@ class source:
         self.refrac = 1.1
         self.refrac_arr = np.full((raynum, 2), [1, self.refrac]).T
 
-    def calc_line(self, count):
+    def calc_line(self, count, output):
         self.grad = np.tan(self.angle)
         self.const = - self.grad * self.source_vec[0, :] + self.source_vec[1, :]
         if count == 2:
@@ -51,6 +51,8 @@ class source:
                 plt.plot(X, self.grad[i] * X + self.const[i])
         #'''
         # const is the c in y = mx + c
+        if output:
+            return [self.grad, self.const]
 
     def intersect(self, radius):
         a = self.grad ** 2 + 1
@@ -86,8 +88,19 @@ class source:
         self.entered = self.collided
 
 
+class Sensor:
+    def __init__(self, x_pos, height):
+        self.x_pos = x_pos
+        seld.height = height
+
+    def image(self, in_grad, in_const):
+        y_pos = in_grad * x_pos + in_const
+        less = y_pos[np.array([y_pos < height])]
+        final = less[np.array([less > height])]
+        return final
+
 shell_num = 1
-source0 = source(0.1, 1.9, 20, shell_num)
+source0 = Source(0.1, 1.9, 20, shell_num)
 
 for n in range(shell_num + 1):
     source0.calc_line(n)
