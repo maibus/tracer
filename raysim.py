@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as ani
+from time import sleep
 
 print("hi")
 
@@ -94,14 +96,12 @@ class Sensor:
     def image(self, in_grad, in_const):
         y_pos = in_grad * self.x_pos + in_const
         less = y_pos[np.array([y_pos < self.height])[0]]
-        print(less)
         final = less[np.array([less > - self.height])[0]]
-        print(final)
         return final
 
 
 shell_num = 1
-source0 = Source(0.0, 1.9, 200, shell_num)
+source0 = Source(0.0, 1.9, 2000, shell_num)
 
 for n in range(shell_num + 1):
     source0.calc_line(n, False, vis=False)  # don't return these ray lines
@@ -109,10 +109,32 @@ for n in range(shell_num + 1):
     source0.refract()
 rays = source0.calc_line(shell_num + 1, True, vis=False)  # final ray lines
 
-sensor = Sensor(5, 1)
-image = sensor.image(rays[0], rays[1])
+source1 = Source(0.01, 1.9, 2000, shell_num)
 
-plt.scatter(np.zeros([len(image)]), image)
+for n in range(shell_num + 1):
+    source1.calc_line(n, False, vis=False)  # don't return these ray lines
+    source1.intersect(1)
+    source1.refract()
+rays1 = source1.calc_line(shell_num + 1, True, vis=False)  # final ray lines
+
+fig = plt.figure()
+ax = fig.gca()
+
+
+def focus(i):
+    if i == 0:
+        sleep(7)
+    ax.clear()
+    sensor = Sensor(1.1 + 0.1 * i, 0.1)
+    image = sensor.image(rays[0], rays[1])
+    image1 = sensor.image(rays1[0], rays1[1])
+    ax.hist(image, bins=50)
+    ax.hist(image1, bins=50)
+    print(1.1 + 0.1 * i)
+
+
+anim = ani.FuncAnimation(fig, focus, interval=50)
+plt.show()
 
 '''
 plt.scatter(source0.source_vec[0], source0.source_vec[1], c='black')
