@@ -39,17 +39,17 @@ class Source:
         self.refrac = 1.1
         self.refrac_arr = np.full((raynum, 2), [1, self.refrac]).T
 
-    def calc_line(self, count, output):
+    def calc_line(self, count, output, vis):
         self.grad = np.tan(self.angle)
         self.const = - self.grad * self.source_vec[0, :] + self.source_vec[1, :]
-        if count == 2:
-            count = 15
-        #'''  #visualise the rays
-        if count > -1:
-            for i in range(self.raynum):
-                X = np.linspace(self.source_vec[0, i], count, 200)
-                plt.plot(X, self.grad[i] * X + self.const[i])
-        #'''
+        if vis:
+            if count == 2:
+                count = 15
+            #  visualise the rays
+            if count > -1:
+                for i in range(self.raynum):
+                    X = np.linspace(self.source_vec[0, i], count, 200)
+                    plt.plot(X, self.grad[i] * X + self.const[i])
         # const is the c in y = mx + c
         if output:
             return [self.grad, self.const]
@@ -76,9 +76,7 @@ class Source:
         n2 = np.diag(self.refrac_arr[1 - self.entered])  # TODO: FIX THIS (not generalisable for shells > 1)
 
         is_negative = self.source_vec[0] / abs(self.source_vec[0])
-        print(is_negative)
         phi = np.arctan(self.source_vec[1]/self.source_vec[0]) + (np.pi) * ((1 - is_negative) / 2)
-        print(np.degrees(phi)-180, "phi")
 
         theta_1 = phi - self.angle - np.pi * ((1 - is_negative) / 2)
         theta_2 = np.arcsin((n1 * np.sin(theta_1)) / n2)
@@ -91,24 +89,34 @@ class Source:
 class Sensor:
     def __init__(self, x_pos, height):
         self.x_pos = x_pos
-        seld.height = height
+        self.height = height
 
     def image(self, in_grad, in_const):
-        y_pos = in_grad * x_pos + in_const
-        less = y_pos[np.array([y_pos < height])]
-        final = less[np.array([less > height])]
+        y_pos = in_grad * self.x_pos + in_const
+        less = y_pos[np.array([y_pos < self.height])[0]]
+        print(less)
+        final = less[np.array([less > - self.height])[0]]
+        print(final)
         return final
 
+
 shell_num = 1
-source0 = Source(0.1, 1.9, 20, shell_num)
+source0 = Source(0.0, 1.9, 200, shell_num)
 
 for n in range(shell_num + 1):
-    source0.calc_line(n)
+    source0.calc_line(n, False, vis=False)  # don't return these ray lines
     source0.intersect(1)
     source0.refract()
-source0.calc_line(2)
+rays = source0.calc_line(shell_num + 1, True, vis=False)  # final ray lines
 
+sensor = Sensor(5, 1)
+image = sensor.image(rays[0], rays[1])
+
+plt.scatter(np.zeros([len(image)]), image)
+
+'''
 plt.scatter(source0.source_vec[0], source0.source_vec[1], c='black')
 plt.scatter(np.linspace(-1, 1, 100), np.sqrt(1 - np.linspace(-1, 1, 100) ** 2))
 plt.scatter(np.linspace(-1, 1, 100), - np.sqrt(1 - np.linspace(-1, 1, 100) ** 2))
+'''
 plt.show()
