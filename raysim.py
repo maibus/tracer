@@ -40,7 +40,7 @@ class Source:
 
         self.refrac_arr = np.zeros([rings, 2, raynum])
 
-        refracs = np.array([1, 1.1, 1.2])
+        refracs = np.array([1, 1.1, 1.15, 1.2])
         for n in range(rings):  # create array of each refractive index for each ring
             self.refrac_arr[n, :, :] = np.full((raynum, 2), [refracs[n], refracs[n + 1]]).T
             print(n, self.refrac_arr[n, :, :])
@@ -81,9 +81,9 @@ class Source:
         self.collided[:, count] = intersected  # TODO: make sure these are x and y coords
 
         if vis:
-            plt.scatter(source0.source_vec[0], source0.source_vec[1], c='black')
-            plt.scatter(np.linspace(-1, 1, 100), np.sqrt(1 - np.linspace(-1, 1, 100) ** 2))
-            plt.scatter(np.linspace(-1, 1, 100), - np.sqrt(1 - np.linspace(-1, 1, 100) ** 2))
+            plt.scatter(source0.source_vec[0], source0.source_vec[1], c='black', s=2)
+            plt.scatter(np.linspace(-1, 1, 1000), np.sqrt(radius ** 2 - np.linspace(-1, 1, 1000) ** 2), s=1)
+            plt.scatter(np.linspace(-1, 1, 1000), - np.sqrt(radius ** 2 - np.linspace(-1, 1, 1000) ** 2), s=1)
 
     def refract(self, count):
         n1 = np.diag(self.refrac_arr[count, :, :][self.entered][:, count])
@@ -117,7 +117,7 @@ class Sensor:
         return final
 
 
-shell_num = 2
+shell_num = 3
 source0 = Source(0.0, 1.9, 20, shell_num)
 ring_rad = 0.1
 
@@ -125,7 +125,7 @@ ring_rad = 0.1
 shell_ref = np.append(np.arange(shell_num), np.arange(shell_num)[::-1])
 for n in range(shell_num * 2):
     source0.calc_line(n, False, vis=True)  # don't return these ray lines
-    source0.intersect(shell_ref[n], 1 - ring_rad * shell_ref[n], True)
+    source0.intersect(shell_ref[n], 1 - ring_rad * shell_ref[n], vis=True)
     print(shell_ref[n], "istfg")
     source0.refract(shell_ref[n])
 print("1")
@@ -141,14 +141,14 @@ def focus(i):
     ax.clear()
     sensor = Sensor(1.1 + 0.1 * i, 0.1)
     image = sensor.image(rays[0], rays[1])
-    image1 = sensor.image(rays1[0], rays1[1])
-    ax.hist(image, bins=50)
-    ax.hist(image1, bins=50)
+    #image1 = sensor.image(rays1[0], rays1[1])
+    ax.hist(image, bins=100)
+    #ax.hist(image1, bins=50)
     print(1.1 + 0.1 * i)
 
 
 anim = ani.FuncAnimation(fig, focus, interval=50)
-
+plt.show()
 '''
 
 plt.show()
