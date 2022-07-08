@@ -21,8 +21,62 @@ def arrdot(a, b, size):
     return p0 * p2 + p1 * p3
 
 
+def temp(z):
+    if z < 11000:
+        temperature = 288.14 - 0.00649 * z
+    elif z > 25000:
+        temperature = 141.89 + 0.00299 * z
+    else:
+        temperature = 216.64
+    return temperature
+
+
+def press(z):
+    if z < 11000:
+        pressure = 101290 * (temp(z) / 288.08) ** 5.256
+    elif z > 25000:
+        pressure = 2488 * (temp(z) / 216.6) ** (-11.388)
+    else:
+        pressure = 22650 * np.exp(1.73 - 0.000157 * z)
+    return pressure
+
+
+def compress(p, t, rh):  # work out compressibility factor
+    t -= 273.1
+    p /= 10 ** 6
+    part1 = 1.00001 - 5.8057 * 10 ** (-3) * p + 2.6402 * 10 ** (-4) * p ** 2
+    part2 = - 3.3297 * 10 ** (-7) * t + 1.2420 * 10 ** (-4) * p * t - 2.0158 * 10 ** (-6) * p ** 2 * t
+    part3 = + 2.4925 * 10 ** (-9) * t ** 2 - 6.2873 * 10 ** (-7) * p * t ** 2 + 5.4174 * 10 ** (-9) * p ** 2 * t ** 2
+    part4 = - 3.5 * 10 ** (-7) * rh - 5 * 10 ** (-9) * rh ** 2
+    return part1 + part2 + part3 + part4
+
+
+def edlen(z, rh, wlen):
+    p = press(z)/100
+    t = temp(z)
+    wlen /= 1000
+    sigma = 1/wlen
+    part1 = (77.497 + 0.013) * (p / t) * (1 / compress(p, t, rh))
+    part2 = (0.306007 + 88.2581 / (130 - sigma ** 2) + 0.5868 / (38.9 - sigma ** 2))
+    part3 = part1 * part2
+    return (part3 / 10 ** (6)) + 1
+
+
+X = np.linspace(0, 85000, 200)
+Y = X
+for n in range(200):
+    Y[n] = edlen(X[n], 0, 500)
+plt.scatter(np.linspace(0, 85000, 200), Y)
+plt.show()
+
+
+earth_rad = 6731 * 1000
+at_rad = 85 * 1000
+tot_rad = earth_rad + at_rad
+
+
 class Source:
-    def __init__(self, angle, diameter, raynum, rings):
+    def __init__(self, angle, diameter, raynum, rings, refracs):
         source_vec = np.zeros([2, raynum])
         source_vec[0, :] = np.linspace(0, diameter, raynum) * np.cos(angle + np.pi / 2)
         source_vec[1, :] = np.linspace(0, diameter, raynum) * np.sin(angle + np.pi / 2)
@@ -40,20 +94,24 @@ class Source:
 
         self.refrac_arr = np.zeros([rings, 2, raynum])
 
-        refracs = np.array([1, 1.1, 1.15, 1.2, 1.2])
-        self.absorb = [0, 0, 0, 0, 1]
+        self.absorb = np.zeros([rings + 1])
+        self.absorb[-1] = 1
         for n in range(rings):  # create array of each refractive index for each ring
             self.refrac_arr[n, :, :] = np.full((raynum, 2), [refracs[n], refracs[n + 1]]).T
             print(n, self.refrac_arr[n, :, :])
 
         self.absorbed = np.zeros([raynum])
+        self.diameter = diameter
+        self.rings = rings
 
     def calc_line(self, count, output, vis):
         self.grad = np.tan(self.angle)
         self.const = - self.grad * self.source_vec[0, :] + self.source_vec[1, :]
+        if count < self.rings * 2:
+            count = self.diameter * 1000
         if vis:
             #  visualise the rays
-            if count > 4:
+            if count > -1:
                 for i in range(self.raynum):
                     if self.absorbed[i] == 0:
                         X = np.linspace(self.source_vec[0, i], count, 200)
@@ -81,9 +139,10 @@ class Source:
         self.collided[:, count] = intersected  # TODO: make sure these are x and y coords
 
         if vis:
-            plt.scatter(source0.source_vec[0], source0.source_vec[1], c='black', s=2)
-            plt.scatter(np.linspace(-1, 1, 1000), np.sqrt(radius ** 2 - np.linspace(-1, 1, 1000) ** 2), s=1)
-            plt.scatter(np.linspace(-1, 1, 1000), - np.sqrt(radius ** 2 - np.linspace(-1, 1, 1000) ** 2), s=1)
+            print(radius, "radius")
+            #plt.scatter(source0.source_vec[0], source0.source_vec[1], c='black', s=2)
+            plt.scatter(np.linspace(-radius, radius, 1000), np.sqrt(radius ** 2 - np.linspace(-radius, radius, 1000) ** 2), s=1)
+            plt.scatter(np.linspace(-radius, radius, 1000), - np.sqrt(radius ** 2 - np.linspace(-radius, radius, 1000) ** 2), s=1)
 
     def refract(self, count):
         n1 = np.diag(self.refrac_arr[count, :, :][self.entered][:, count])
@@ -111,7 +170,7 @@ class Sensor:
         self.height = height
 
     def image(self, in_grad, in_const, absorbed):
-        print(np.sum(absorbed), "absorbed")
+        #print(np.sum(absorbed), "absorbed")
         y_pos = in_grad * self.x_pos + in_const
         remaining = y_pos[np.array([absorbed == 0])[0]]
         less = remaining[np.array([remaining < self.height])[0]]
@@ -119,15 +178,21 @@ class Sensor:
         return final
 
 
-shell_num = 4
-source0 = Source(0.0, 1.9, 8000, shell_num)
-ring_rad = 0.1
+shell_num = 5
+
+ring_rad = at_rad / shell_num
+
+in_refracs = np.ones([shell_num + 1])
+for i in range(1, shell_num + 1):
+    in_refracs[i] = edlen(at_rad - ring_rad * i, 0, 500)
+
+source0 = Source(0.0, tot_rad * 2, 5000, shell_num, in_refracs)
 
 t = time()
 shell_ref = np.append(np.arange(shell_num), np.arange(shell_num)[::-1])
 for n in range(shell_num * 2):
     source0.calc_line(n, False, vis=False)  # don't return these ray lines
-    source0.intersect(shell_ref[n], 1 - ring_rad * shell_ref[n], vis=False)
+    source0.intersect(shell_ref[n], tot_rad - ring_rad * shell_ref[n], vis=False)
     source0.refract(shell_ref[n])
 rays = source0.calc_line(shell_num + 1, True, vis=False)  # final ray lines
 print(time() - t)
@@ -139,12 +204,12 @@ def focus(i):
     if i == 0:
         sleep(1)
     ax.clear()
-    sensor = Sensor(1.1 + 0.02 * i, 0.1)
+    sensor = Sensor(tot_rad + tot_rad * 1000 * (i + 900), tot_rad)
     image = sensor.image(rays[0], rays[1], rays[2])
     #image1 = sensor.image(rays1[0], rays1[1])
-    ax.hist(image, bins=100)
+    ax.hist(image, bins=10)
     #ax.hist(image1, bins=50)
-    print(1.1 + 0.02 * i)
+    print(tot_rad + tot_rad * 1000 * (i + 900), i)
 
 
 anim = ani.FuncAnimation(fig, focus, interval=50)
