@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as ani
-from time import sleep
+from time import sleep, time
 
 print("hi")
 
@@ -40,34 +40,34 @@ class Source:
 
         self.refrac_arr = np.zeros([rings, 2, raynum])
 
-        refracs = np.array([1, 1.1, 1.15, 1.2])
+        refracs = np.array([1, 1.1, 1.15, 1.2, 1.2])
+        self.absorb = [0, 0, 0, 0, 1]
         for n in range(rings):  # create array of each refractive index for each ring
             self.refrac_arr[n, :, :] = np.full((raynum, 2), [refracs[n], refracs[n + 1]]).T
             print(n, self.refrac_arr[n, :, :])
 
+        self.absorbed = np.zeros([raynum])
 
     def calc_line(self, count, output, vis):
         self.grad = np.tan(self.angle)
         self.const = - self.grad * self.source_vec[0, :] + self.source_vec[1, :]
         if vis:
-            if count == 2:
-                count = 15
             #  visualise the rays
-            if count > -1:
+            if count > 4:
                 for i in range(self.raynum):
-                    X = np.linspace(self.source_vec[0, i], count, 200)
-                    #print("vis")
-                    plt.plot(X, self.grad[i] * X + self.const[i])
+                    if self.absorbed[i] == 0:
+                        X = np.linspace(self.source_vec[0, i], count, 200)
+                        #print("vis")
+                        plt.plot(X, self.grad[i] * X + self.const[i])
         # const is the c in y = mx + c
         if output:
-            return [self.grad, self.const]
+            return [self.grad, self.const, self.absorbed]
 
     def intersect(self, count, radius, vis):
         a = self.grad ** 2 + 1
         b = 2 * self.grad * self.const
         c = self.const ** 2 - radius ** 2
         coef = np.array([a, b, c])
-        print(np.shape(coef), "hello")
 
         discriminant = b ** 2 - 4 * a * c
         intersected = np.array([discriminant > 0], dtype='int')[0]  # does a ray interesect?
@@ -88,9 +88,9 @@ class Source:
     def refract(self, count):
         n1 = np.diag(self.refrac_arr[count, :, :][self.entered][:, count])
         n2 = np.diag(self.refrac_arr[count, :, :][1 - self.entered][:, count])
-        print(n1, "n1")
-        print(n2, "n2")
-        print(self.entered[:, count], "entered")
+
+        if bool(self.absorb[count + 1]):
+            self.absorbed = self.entered[:, count]  # if it collided then it was absorbed
 
         is_negative = self.source_vec[0] / abs(self.source_vec[0])
         phi = np.arctan(self.source_vec[1]/self.source_vec[0]) + (np.pi) * ((1 - is_negative) / 2)
@@ -99,7 +99,7 @@ class Source:
         theta_2 = np.arcsin((n1 * np.sin(theta_1)) / n2)
         #print(theta_2, "theta_2")
 
-        theta_o = self.angle + (theta_1 - theta_2) * self.collided[:, count]
+        theta_o = self.angle + (theta_1 - theta_2) * (self.collided[:, count])
         #print(theta_o, "theta_o")
         self.angle = theta_o
         self.entered[:, count] = self.collided[:, count]
@@ -110,41 +110,41 @@ class Sensor:
         self.x_pos = x_pos
         self.height = height
 
-    def image(self, in_grad, in_const):
+    def image(self, in_grad, in_const, absorbed):
+        print(np.sum(absorbed), "absorbed")
         y_pos = in_grad * self.x_pos + in_const
-        less = y_pos[np.array([y_pos < self.height])[0]]
+        remaining = y_pos[np.array([absorbed == 0])[0]]
+        less = remaining[np.array([remaining < self.height])[0]]
         final = less[np.array([less > - self.height])[0]]
         return final
 
 
-shell_num = 3
-source0 = Source(0.0, 1.9, 20, shell_num)
+shell_num = 4
+source0 = Source(0.0, 1.9, 8000, shell_num)
 ring_rad = 0.1
 
-
+t = time()
 shell_ref = np.append(np.arange(shell_num), np.arange(shell_num)[::-1])
 for n in range(shell_num * 2):
-    source0.calc_line(n, False, vis=True)  # don't return these ray lines
-    source0.intersect(shell_ref[n], 1 - ring_rad * shell_ref[n], vis=True)
-    print(shell_ref[n], "istfg")
+    source0.calc_line(n, False, vis=False)  # don't return these ray lines
+    source0.intersect(shell_ref[n], 1 - ring_rad * shell_ref[n], vis=False)
     source0.refract(shell_ref[n])
-print("1")
-rays = source0.calc_line(shell_num + 1, True, vis=True)  # final ray lines
-print("2")
+rays = source0.calc_line(shell_num + 1, True, vis=False)  # final ray lines
+print(time() - t)
 
-'''
+
 fig = plt.figure()
 ax = fig.gca()
 def focus(i):
     if i == 0:
         sleep(1)
     ax.clear()
-    sensor = Sensor(1.1 + 0.1 * i, 0.1)
-    image = sensor.image(rays[0], rays[1])
+    sensor = Sensor(1.1 + 0.02 * i, 0.1)
+    image = sensor.image(rays[0], rays[1], rays[2])
     #image1 = sensor.image(rays1[0], rays1[1])
     ax.hist(image, bins=100)
     #ax.hist(image1, bins=50)
-    print(1.1 + 0.1 * i)
+    print(1.1 + 0.02 * i)
 
 
 anim = ani.FuncAnimation(fig, focus, interval=50)
@@ -152,4 +152,4 @@ plt.show()
 '''
 
 plt.show()
-plt.save("e.jpg")
+'''
